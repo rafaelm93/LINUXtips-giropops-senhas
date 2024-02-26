@@ -1,35 +1,42 @@
-# Estágio de compilação
-FROM python:3.11.4-alpine3.18 AS builder
+# Definindo a imagem base a partir da qual estamos construindo a imagem atual,
+# identificada pelo SHA-256 do digest da imagem. A imagem é nomeada "builder".
+FROM cgr.dev/chainguard/python:latest-dev as builder
 
-WORKDIR /app
+# Definindo o diretório de trabalho para o próximo comando COPY e RUN.
+WORKDIR /giropops-senhas
 
-COPY requirements.txt .
+# Copiando o arquivo requirements.txt do diretório "src" (do contexto de construção)
+# para o diretório de trabalho dentro do contêiner.
+COPY src/requirements.txt .
 
-# Instalação das dependências de compilação
-RUN apk add --no-cache bash && \
-    pip install --no-cache-dir -r requirements.txt
+# Instalando as dependências listadas no arquivo requirements.txt
+# usando o pip. O parâmetro "--user" indica que as dependências devem ser
+# instaladas no diretório de usuário local do contêiner.
+RUN pip install --no-cache-dir -r requirements.txt --user
 
-# Criar o usuário não privilegiado
-RUN adduser -D myuser
-
-# Copiar o código fonte
-COPY . .
-
-# Configurar permissões para o usuário não privilegiado
-RUN chown -R myuser:myuser /app
-
-USER myuser
-
-# Definir as permissões dos arquivos
-RUN chmod -R 755 /app
-
-# Estágio de produção
+# Definindo uma nova etapa de construção baseada em outra imagem base,
+# identificada pelo SHA-256 do digest da imagem.
 FROM cgr.dev/chainguard/python:latest
-WORKDIR /app
 
-# Copiar apenas o código fonte
-COPY --from=builder /app .
+# Definindo o diretório de trabalho para o próximo comando COPY.
+WORKDIR /giropops-senhas
 
-EXPOSE 5000
+# Copiando os pacotes instalados do estágio de compilação (etapa "builder")
+# para o diretório de trabalho dentro do contêiner.
+COPY --from=builder /home/nonroot/.local/lib/python3.12/site-packages /home/nonroot/.local/lib/python3.12/site-packages
 
-CMD ["flask", "run", "--host=0.0.0.0"]
+# Copiando os arquivos app.py e tailwind.config.js do diretório "src" (do contexto de construção)
+# para o diretório de trabalho dentro do contêiner.
+COPY src/app.py src/tailwind.config.js ./
+
+# Copiando o diretório "static" do diretório "src" (do contexto de construção)
+# para o diretório "static" no diretório de trabalho dentro do contêiner.
+COPY src/static ./static
+
+# Copiando o diretório "templates" do diretório "src" (do contexto de construção)
+# para o diretório "templates" no diretório de trabalho dentro do contêiner.
+COPY src/templates ./templates
+
+# Definindo o comando de entrada (entrypoint) para o contêiner.
+# Este comando será executado quando o contêiner for iniciado.
+ENTRYPOINT [ "python", "-m" , "flask", "run", "--host=0.0.0.0" ]
